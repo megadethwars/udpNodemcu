@@ -34,9 +34,20 @@ int velocidad=0;
 /////PID///
 // Arbitrary setpoint and gains - adjust these as fit for your project:
 double setpoint = 0;
-double p = 0.01;
-double i = 0.00005;
+double p = 4.8;
+double i = 0.03;
 double d = 0.0;
+
+int limitUP=2000;
+int limitDown=0;
+
+int integralUp=2000;
+int integralDown=-2000;
+
+double errorint=0.0;
+double erroractual=0.0;
+double errorpast=0.0;
+
 
 
 unsigned int localPort = 8888;      // local port to listen on
@@ -49,6 +60,40 @@ WiFiUDP Udp;
 unsigned long startTime;
 
 void ICACHE_RAM_ATTR ISRoutine ();
+
+double calculatePID(double input, double setpoint,double pr,double in){
+
+  double error=setpoint-input;
+
+  errorint=errorint+error;
+  double integral = in*errorint;
+
+  
+  if(integral>integralUp){
+      integral=integralUp;
+    }
+
+  if(integral<integralDown){
+      integral=integralDown;
+    }
+  
+  erroractual=error-errorpast;
+  errorpast=erroractual;
+  output=(pr*error) +(integral) + d*(erroractual);
+
+
+  if(output>limitUP){
+      output=limitUP;
+    }
+
+  if(output<limitDown){
+      output=limitDown;
+    }
+
+  
+  return output;
+  }
+
 
 void setupPID(){
 
@@ -94,7 +139,7 @@ void setup() {
   pinMode(BUTTON, INPUT_PULLUP);
  attachInterrupt(digitalPinToInterrupt(BUTTON),ISRoutine,RISING);
 
- setupPID();
+ //setupPID();
 }
 
 void Send(String estatus,int cuenta){
@@ -153,8 +198,22 @@ void receiveData(int pktsize){
 
   if(CMD=="ST"){
       //Stop();
+      myController.reset();
       Send("Stop OK",1);
-      Serial.println("Stop ok");
+      //Serial.println("Stop ok");
+    }
+
+   if(CMD=="P"){
+      p=DATA/100.0;
+      Send("P OK",1);
+      //Serial.println("Stop ok");
+    }
+
+   if(CMD=="I"){
+      
+      i=DATA/100.0;
+      Send("I OK",1);
+      //Serial.println("Stop ok");
     }
     
 
@@ -197,8 +256,8 @@ void loop() {
     count=0;
     startTime = millis(); // reiniciar el contador
   }
-  myController.compute();
-  
+  //myController.compute();
+  output=calculatePID(input,setpoint,p,i);
   analogWrite(pwmMotorB, (int)output);
 
 
