@@ -34,8 +34,8 @@ int velocidad=0;
 /////PID///
 // Arbitrary setpoint and gains - adjust these as fit for your project:
 double setpoint = 0;
-double p = 4.8;
-double i = 0.03;
+double p = 1.5;
+double i = 0.01;
 double d = 0.0;
 
 int limitUP=2000;
@@ -61,25 +61,24 @@ unsigned long startTime;
 
 void ICACHE_RAM_ATTR ISRoutine ();
 
-double calculatePID(double input, double setpoint,double pr,double in){
+double calculatePID(double input, double setpoint,double pr,double in,double dif){
 
   double error=setpoint-input;
-
-  errorint=errorint+error;
   double integral = in*errorint;
-
-  
   if(integral>integralUp){
       integral=integralUp;
     }
 
-  if(integral<integralDown){
+  else if(integral<integralDown){
       integral=integralDown;
+    }
+  else{
+    errorint=errorint+error;
     }
   
   erroractual=error-errorpast;
-  errorpast=erroractual;
-  output=(pr*error) +(integral) + d*(erroractual);
+  errorpast=error;
+  output=(pr*error) +(integral) + dif*(erroractual);
 
 
   if(output>limitUP){
@@ -215,6 +214,13 @@ void receiveData(int pktsize){
       Send("I OK",1);
       //Serial.println("Stop ok");
     }
+
+   if(CMD=="D"){
+      
+      d=DATA/100.0;
+      Send("I OK",1);
+      //Serial.println("Stop ok");
+    }
     
 
     // send a reply, to the IP address and port that sent us the packet we received
@@ -257,7 +263,7 @@ void loop() {
     startTime = millis(); // reiniciar el contador
   }
   //myController.compute();
-  output=calculatePID(input,setpoint,p,i);
+  output=calculatePID(input,setpoint,p,i,d);
   analogWrite(pwmMotorB, (int)output);
 
 
