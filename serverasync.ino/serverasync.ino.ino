@@ -14,9 +14,14 @@
 #include <ESPAsyncTCP.h>
 #endif
 #include <ESPAsyncWebServer.h>
+#include <AsyncWebSocket.h>
 #define BUTTON 13 //botón en GPIO13 (D7)
 
 AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
+
+
+
 
 const char* ssid = "empires";
 const char* password = "44863333";
@@ -106,6 +111,21 @@ double calculatePID(double input, double setpoint,double pr,double in,double dif
   }
 
 
+void onWebSocketEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
+  if(type == WS_EVT_CONNECT){
+    Serial.printf("Cliente conectado: %u\n", client->id());
+  } else if(type == WS_EVT_DISCONNECT){
+    Serial.printf("Cliente desconectado: %u\n", client->id());
+  } else if(type == WS_EVT_DATA){
+    String msg = "";
+    for(size_t i=0; i < len; i++) {
+      msg += (char) data[i];
+    }
+    Serial.printf("Cliente %u envió el siguiente mensaje: %s\n", client->id(), msg.c_str());
+    ws.textAll(msg);
+  }
+}
+
 void setup() {
 
     Serial.begin(115200);
@@ -120,6 +140,10 @@ void setup() {
 
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
+
+
+    ws.onEvent(onWebSocketEvent);
+    server.addHandler(&ws);
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(200, "text/plain", "Hello, world");
