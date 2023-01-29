@@ -14,7 +14,7 @@
 #include <ESPAsyncTCP.h>
 #endif
 #include <ESPAsyncWebServer.h>
-
+#define BUTTON 13 //botón en GPIO13 (D7)
 
 AsyncWebServer server(80);
 
@@ -28,12 +28,83 @@ void notFound(AsyncWebServerRequest *request) {
 }
 
 
+///ports motor
+int pwmMotorA = 5;
+int pwmMotorB = 4;
+int dirMotorA = 0;
+int dirMotorB = 2;
+
+double input;
+double output;
+volatile int count = 0;
+int velocidad=0;
+
+/////PID///
+// Arbitrary setpoint and gains - adjust these as fit for your project:
+double setpoint = 0;
+double p = 1.5;
+double i = 0.01;
+double d = 0.0;
+
+int limitUP=2000;
+int limitDown=0;
+
+int integralUp=2000;
+int integralDown=-2000;
+
+double errorint=0.0;
+double erroractual=0.0;
+double errorpast=0.0;
+unsigned long startTime;
+
+void ICACHE_RAM_ATTR ISRoutine ();
+
+void configureSettings(){
+  startTime = millis();
+
+  analogWriteFreq(100);
+  analogWriteRange(2047);
+ 
+  pinMode(pwmMotorB, OUTPUT);
+  pinMode(dirMotorB, OUTPUT);
+  digitalWrite(dirMotorB, LOW);
+
+  pinMode(BUTTON, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUTTON),ISRoutine,RISING);
+ }
+
+double calculatePID(double input, double setpoint,double pr,double in,double dif){
+
+  double error=setpoint-input;
+  double integral = in*errorint;
+  if(integral>integralUp){
+      integral=integralUp;
+    }
+
+  else if(integral<integralDown){
+      integral=integralDown;
+    }
+  else{
+    errorint=errorint+error;
+    }
+  
+  erroractual=error-errorpast;
+  errorpast=error;
+  output=(pr*error) +(integral) + dif*(erroractual);
 
 
-void configurePID(){
+  if(output>limitUP){
+      output=limitUP;
+    }
+
+  if(output<limitDown){
+      output=limitDown;
+    }
+
   
-  
+  return output;
   }
+
 
 void setup() {
 
@@ -44,6 +115,8 @@ void setup() {
         Serial.printf("WiFi Failed!\n");
         return;
     }
+
+    configureSettings();
 
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
@@ -87,12 +160,15 @@ void setup() {
         if(request->hasHeader("D")){
           AsyncWebHeader* h = request->getHeader("D");
           message=h->value().c_str();
+          
           request->send(200, "text/plain", "D:" + message);
         }
 
         if(request->hasHeader("SetPoint")){
           AsyncWebHeader* h = request->getHeader("SetPoint");
           message=h->value().c_str();
+          int st = message.toInt();
+          setpoint=(double)st;
           request->send(200, "text/plain", "SetPoint:" + message);
         }
         
@@ -106,6 +182,18 @@ void setup() {
 
 void loop() {
 
-  delay(1000);
-  Serial.println("ya");
+  if (millis() - startTime >= 250) { 
+
+    velocidad = count;
+    input=(double)velocidad;
+    count=0;
+    startTime = millis(); // reiniciar el contador
+  }
+  output=calculatePID(input,setpoint,p,i,d);
+  analogWrite(pwmMotorB, (int)output);
+}
+
+
+void ISRoutine () {
+  count=count+1;
 }
