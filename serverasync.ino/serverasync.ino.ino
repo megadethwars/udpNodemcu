@@ -1,4 +1,4 @@
-//
+ //
 // A simple server implementation showing how to:
 //  * serve static messages
 //  * read GET and POST parameters
@@ -22,6 +22,8 @@ AsyncWebSocket ws("/ws");
 
 
 
+String htmlCode3 = "<!DOCTYPE html><html><head><title>Control de motor</title><style>body{background-color:#050b16;text-align:center;font-family:Arial,sans-serif}h1{margin-top:50px;color:#333}#slider{width:300px;margin-top:30px;margin-bottom:50px}#speed{font-size:24px;color:#00f7ff}#websocketValue{font-size:18px;color:#00f7ff;margin-top:20px}#titleset{font-size:18px;color:#00f7ff;margin-top:20px}</style></head><body><h1 style=\"color:#00f7ff\">Control de Velocidad</h1><input type=\"range\" min=\"0\" max=\"255\" value=\"0\" id=\"slider\" oninput=\"handleChange(this.value)\"><p id=\"titleset\">SETPOINT (counts per second)</p><p id=\"speed\">0</p><p id=\"websocketValue\"></p><script>function handleChange(value){if(value%5===0){document.getElementById(\"speed\").textContent=value;fetch(\"/post\",{method:\"POST\",headers:{\"Content-Type\":\"application/x-www-form-urlencoded\",\"SetPoint\":value.toString()}}).then(response=>{if(!response.ok){throw new Error(\"Error en la solicitud: \"+response.status)}return response.text()}).then(responseData=>{console.log(\"Respuesta del servidor:\",responseData)}).catch(error=>{console.error(\"Error en la solicitud:\",error)})}}const socket=new WebSocket(\"ws://\"+window.location.hostname+\"/ws\");socket.onopen=function(event){console.log(\"WebSocket connected\")};socket.onmessage=function(event){console.log(\"WebSocket message:\",event.data);var jsonData=JSON.parse(event.data);if(jsonData.hasOwnProperty(\"output\")){document.getElementById(\"websocketValue\").textContent=\"Salida Encoder: \"+jsonData.output}};</script></body></html>";
+String htmlCode = "<!DOCTYPE html><html><head><title>Control de motor</title><style>body{background-color:#050b16;text-align:center;font-family:Arial, sans-serif;}h1{margin-top:50px;color:#333;}#slider{width:300px;margin-top:30px;margin-bottom:50px;}#speed{font-size:24px;color: #00f7ff}#websocketValue{font-size:18px;color:#00f7ff;margin-top:20px;}</style></head><body><h1 style=\"color: #00f7ff\">Control de Velocidad</h1><input type=\"range\" min=\"0\" max=\"255\" value=\"0\" id=\"slider\" oninput=\"handleChange(this.value)\"><p id=\"speed\">0</p><p id=\"websocketValue\"></p><script>function handleChange(value) { if (value % 5 === 0) { document.getElementById(\"speed\").textContent = value; fetch(\"/post\", { method: \"POST\", headers: { \"Content-Type\": \"application/x-www-form-urlencoded\", \"SetPoint\": value.toString() }}).then(response => { if (!response.ok) { throw new Error(\"Error en la solicitud: \" + response.status); } return response.text(); }).then(responseData => { console.log(\"Respuesta del servidor:\", responseData); }).catch(error => { console.error(\"Error en la solicitud:\", error); }); } } const socket = new WebSocket(\"ws://\" + window.location.hostname + \"/ws\"); socket.onopen = function(event) { console.log(\"WebSocket connected\"); }; socket.onmessage = function(event) { console.log(\"WebSocket message:\", event.data); var jsonData = JSON.parse(event.data); if (jsonData.hasOwnProperty(\"output\")) { document.getElementById(\"websocketValue\").textContent = \"Valor del WebSocket: \" + jsonData.output; } }; socket.onclose = function(event) { console.log(\"WebSocket disconnected\"); };</script></body></html>";
 
 const char* ssid = "empires";
 const char* password = "44863333";
@@ -144,14 +146,15 @@ void setup() {
 
     ws.onEvent(onWebSocketEvent);
     server.addHandler(&ws);
-
+    ////////////INDEX
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/plain", "Hello, world");
+        request->send(200, "text/html", htmlCode3);
     });
 
     // Send a GET request to <IP>/get?message=<message>
     server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request) {
         String message;
+        Serial.printf("entering---get");
         if (request->hasParam(PARAM_MESSAGE)) {
             message = request->getParam(PARAM_MESSAGE)->value();
         } else {
@@ -162,6 +165,8 @@ void setup() {
 
     // Send a POST request to <IP>/post with a form field message set to <message>
     server.on("/post", HTTP_POST, [](AsyncWebServerRequest *request){
+      Serial.println("entering....");
+      
         String message;
         if (request->hasParam(PARAM_MESSAGE, true)) {
             message = request->getParam(PARAM_MESSAGE, true)->value();
@@ -193,7 +198,12 @@ void setup() {
           message=h->value().c_str();
           int st = message.toInt();
           setpoint=(double)st;
-          request->send(200, "text/plain", "SetPoint:" + message);
+          
+          AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "SetPoint:" + message);
+          response->addHeader("Access-Control-Allow-Origin", "*");
+          request->send(response);
+          //request->send(200, "text/plain", "SetPoint:" + message);
+          Serial.println("sending HEADER, please check..");
         }
         
         request->send(200, "text/plain", "Hello, POST: " + message);
@@ -212,6 +222,9 @@ void loop() {
     input=(double)velocidad;
     count=0;
     startTime = millis(); // reiniciar el contador
+
+    
+    ws.textAll("{\"output\":"+String(velocidad)+"}");
   }
   output=calculatePID(input,setpoint,p,i,d);
   analogWrite(pwmMotorB, (int)output);
